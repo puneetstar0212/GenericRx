@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0d9488">
+  <meta name="description" content="GenericRx - Offline-First Medicine Alternative & Cost Audit System">
+  
+  <title>GenericRx – Offline-First Medicine Alternative & Cost Audit System</title>
+  
+  <!-- PWA Manifest & Favicon -->
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+  
+  <!-- Leaflet.js 100% Free Open-Source Map Styles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Custom Glassmorphism Styles -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  
+  <!-- Leaflet.js & Lucide Icons & Dexie IndexedDB & Fuse.js CDN -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.basic.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <!-- Sticky Glass Navbar -->
+  <header class="glass-navbar">
+    <div class="nav-container">
+      <div class="logo-group">
+        <div class="logo-icon">Rx</div>
+        <div>
+          <div class="logo-title">GenericRx</div>
+          <div class="logo-subtitle">Offline-First Medicine & Cost Audit System</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span id="connectionStatus" class="status-pill online">
+          <span class="dot online"></span> 🟢 Python Server Connected
+        </span>
+        
+        <span id="dbCountBadge" style="background: rgba(26, 36, 56, 0.8); border: 1px solid var(--border-color); padding: 0.45rem 0.9rem; border-radius: 9999px; font-size: 0.8rem; color: var(--accent-teal); font-weight: 700;">
+          567 Meds Cached
+        </span>
+
+        <button id="installPwaBtn" class="btn-primary" style="display: none; padding: 0.45rem 1rem; font-size: 0.85rem;">
+          <i data-lucide="download" style="width: 14px; height: 14px;"></i> Install App
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <main class="main-content">
+    
+    <!-- Hero Header & Search Section -->
+    <section class="hero-section">
+      <div class="floating-pill-badge">
+        <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Powered by Python 3.14 & Offline PWA Architecture
+      </div>
+
+      <h1 class="hero-title">Discover Equivalent <span class="hero-gradient">Generic Medicines</span> & Save Up to 85%</h1>
+      <p class="hero-subtitle">Search any brand-name medication to instantly map its active chemical composition, find government-approved Jan Aushadhi alternatives, audit prescription costs, and work 100% offline in zero-connectivity clinic rooms.</p>
+      
+      <!-- Interactive Stat Counter Row -->
+      <div class="stats-banner">
+        <div class="stat-item">
+          <span id="statMedCount" class="stat-val" style="color: var(--accent-teal);">0+</span>
+          <span class="stat-lbl">Medicines Cached</span>
+        </div>
+        <div class="stat-item">
+          <span id="statSavingsPct" class="stat-val" style="color: var(--accent-emerald);">0%</span>
+          <span class="stat-lbl">Max Cost Savings</span>
+        </div>
+        <div class="stat-item">
+          <span id="statReliablePct" class="stat-val" style="color: var(--accent-cyan);">0%</span>
+          <span class="stat-lbl">Offline Reliable</span>
+        </div>
+        <div class="stat-item">
+          <span id="statPharmCount" class="stat-val" style="color: var(--accent-indigo);">0+</span>
+          <span class="stat-lbl">Local Pharmacies</span>
+        </div>
+      </div>
+
+      <!-- Search Input Box -->
+      <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search brand name (e.g. Crocin 650, Augmentin, Glycomet) or active salt (Paracetamol)..." value="Crocin">
+        <i data-lucide="search" class="search-icon-inside" style="width: 24px; height: 24px;"></i>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="filter-pills">
+        <button class="filter-btn active" data-filter="all">All Medicines</button>
+        <button class="filter-btn" data-filter="generic">Jan Aushadhi / Generics Only</button>
+        <button class="filter-btn" data-filter="prescription">Prescription Required (Schedule H/X)</button>
+        <button class="filter-btn" data-filter="otc">Over The Counter (OTC)</button>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs for Search vs Nearby Map -->
+    <div class="view-tab-container">
+      <button id="tabSearchBtn" class="tab-btn active">
+        <i data-lucide="search" style="width: 18px; height: 18px;"></i> Medicine & Cost Audit Engine
+      </button>
+      <button id="tabMapBtn" class="tab-btn">
+        <i data-lucide="map-pin" style="width: 18px; height: 18px;"></i> 📍 Nearby Pharmacy & Jan Aushadhi Locator
+      </button>
+    </div>
+
+    <!-- View 1: Medicine Search & Prescription Audit Dashboard Grid -->
+    <div id="viewSearchDashboard" class="dashboard-grid">
+      
+      <!-- Left Column: Search Results & Alternatives -->
+      <div>
+        
+        <!-- Target Medicine Alternatives Panel (When Selected) -->
+        <div id="targetMedicineDetail" style="margin-bottom: 1.5rem;"></div>
+
+        <!-- Generic Alternatives Header -->
+        <div class="section-header">
+          <div class="section-title">
+            <i data-lucide="pill" style="color: var(--accent-teal); width: 24px; height: 24px;"></i>
+            Medicine & Chemical Salt Catalog
+          </div>
+          <span id="searchCount" style="font-size: 0.85rem; color: var(--text-muted);">0 results found</span>
+        </div>
+
+        <!-- Medicine Results List -->
+        <div id="searchResultsList"></div>
+
+        <!-- Generic Alternatives List -->
+        <div id="alternativesContainer"></div>
+
+      </div>
+
+      <!-- Right Column: Prescription Cost Audit Basket Sidebar -->
+      <aside>
+        <div class="glass-card basket-card">
+          <div class="section-header" style="margin-bottom: 0.75rem;">
+            <div class="section-title" style="font-size: 1.15rem;">
+              <i data-lucide="calculator" style="color: var(--accent-emerald); width: 22px; height: 22px;"></i>
+              Prescription Savings Audit
+            </div>
+            <span id="overallSavingsBadge" class="savings-badge savings-green">0% Cost Savings</span>
+          </div>
+          
+          <p style="font-size: 0.825rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Add your daily prescribed medications to calculate total monthly and annual savings with generic alternatives.
+          </p>
+
+          <!-- Basket Item List -->
+          <div id="basketList">
+            <div style="text-align: center; color: var(--text-muted); padding: 1.5rem 0;">
+              <i data-lucide="shopping-cart" style="width: 40px; height: 40px; opacity: 0.4; margin-bottom: 0.5rem;"></i>
+              <p style="font-size: 0.9rem;">Your prescription audit basket is empty.</p>
+            </div>
+          </div>
+
+          <!-- Total Savings Highlight Box -->
+          <div class="savings-highlight-box">
+            <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">ESTIMATED MONTHLY SAVINGS</div>
+            <div id="totalSavedMonthly" class="total-saved-number">₹0.00</div>
+            
+            <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 700; margin-top: 0.6rem; text-transform: uppercase;">ESTIMATED ANNUAL SAVINGS</div>
+            <div id="totalSavedYearly" style="font-size: 1.45rem; font-weight: 900; color: var(--accent-teal);">₹0.00</div>
+          </div>
+
+          <button id="exportReportBtn" class="btn-primary" style="width: 100%; margin-top: 1.25rem;">
+            <i data-lucide="file-text" style="width: 18px; height: 18px;"></i>
+            Generate Prescription Audit Report
+          </button>
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- View 2: Nearby Pharmacy & Jan Aushadhi Locator Map Grid -->
+    <div id="viewMapDashboard" class="dashboard-grid" style="display: none;">
+      
+      <!-- Interactive Leaflet Map Box -->
+      <div>
+        <div class="glass-card" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div class="section-title" style="font-size: 1.25rem;">
+              <i data-lucide="map" style="color: var(--accent-cyan); width: 24px; height: 24px;"></i>
+              Interactive OpenStreetMap Pharmacy Locator
+            </div>
+            
+            <div style="display: flex; gap: 0.6rem;">
+              <button id="btnGpsFind" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                <i data-lucide="navigation" style="width: 14px; height: 14px;"></i> Find Near Me (GPS)
+              </button>
+              <select id="citySelect" style="background: rgba(11, 17, 30, 0.9); border: 1px solid var(--border-color); color: #ffffff; padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">
+                <option value="">All Cities</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Bangalore">Bangalore</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Leaflet Map Container -->
+          <div id="leafletMap" style="height: 500px; width: 100%; border-radius: 18px; border: 1px solid var(--border-color); background: #0f172a; z-index: 1; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);"></div>
+        </div>
+      </div>
+
+      <!-- Nearby Pharmacy Cards Sidebar -->
+      <aside>
+        <div class="glass-card">
+          <div class="section-header">
+            <div class="section-title" style="font-size: 1.15rem;">
+              <i data-lucide="store" style="color: var(--accent-emerald); width: 22px; height: 22px;"></i>
+              Nearby Stores
+            </div>
+            <span id="pharmacyCountBadge" class="badge-tag badge-generic">8 Stores</span>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+            <span style="font-size: 0.775rem; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 0.25rem 0.6rem; border-radius: 8px; font-weight: 700;">🟢 Jan Aushadhi Kendra</span>
+            <span style="font-size: 0.775rem; background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 0.25rem 0.6rem; border-radius: 8px; font-weight: 700;">🔵 Retail Pharmacy</span>
+          </div>
+
+          <!-- Pharmacy List -->
+          <div id="pharmacyListContainer" style="max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.85rem;"></div>
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- Regulatory Medical Disclaimer Banner -->
+    <div class="disclaimer-banner">
+      <i data-lucide="alert-triangle" style="width: 26px; height: 26px; flex-shrink: 0; color: #f43f5e;"></i>
+      <div>
+        <strong style="color: #ffffff;">Therapeutic Safety & Regulatory Disclaimer:</strong>
+        GenericRx is a neutral educational and price audit tool. Controlled drugs marked Schedule H or Schedule X require a valid doctor's prescription. Never alter your dosage strength or active chemical composition without prior consultation with a qualified medical professional or pharmacist.
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Printable Prescription Audit Report Modal -->
+  <div id="reportModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--accent-teal);">Prescription Audit Summary</h3>
+        <button id="closeReportModal" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.4rem;">✕</button>
+      </div>
+
+      <div id="reportModalContent"></div>
+    </div>
+  </div>
+
+  <!-- PWA Application Script -->
+  <script src="/static/js/db.js"></script>
+  <script src="/static/js/app.js"></script>
+
+</body>
+</html>
