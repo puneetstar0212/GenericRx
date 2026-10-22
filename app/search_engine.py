@@ -57,6 +57,9 @@ def get_alternatives(medicine_id: int, db: Session):
     """
     Find alternatives for a given medicine matching exact active salt composition.
     Calculates cost savings %, visual audit badge, and dosage mismatch flags.
+
+    When a price is unknown (None), savings_percentage is None and the badge
+    reads "Price unavailable". Sorting places unknown-priced items last.
     """
     target = db.query(Medicine).filter(Medicine.id == medicine_id).first()
     if not target:
@@ -89,7 +92,7 @@ def get_alternatives(medicine_id: int, db: Session):
             mismatch_reasons.append(f"Form difference ({alt.dosage_form} vs {target.dosage_form})")
 
         alt_dict = alt.to_dict()
-        alt_dict["savingsPercentage"] = round(savings_pct, 1)
+        alt_dict["savingsPercentage"] = round(savings_pct, 1) if savings_pct is not None else None
         alt_dict["savingsBadgeColor"] = badge_color
         alt_dict["savingsBadgeText"] = badge_text
         alt_dict["hasMismatch"] = has_mismatch
@@ -97,8 +100,18 @@ def get_alternatives(medicine_id: int, db: Session):
 
         processed_alternatives.append(alt_dict)
 
-    # Sort: Generics first, then highest savings %
-    processed_alternatives.sort(key=lambda x: (not x["isGeneric"], -x["savingsPercentage"], x["pricePerUnit"]))
+    # Sort: Generics first, then highest savings %, then lowest price.
+    # Items with unknown prices (None) sort last within each tier.
+    def _sort_key(x):
+        savings = x["savingsPercentage"]
+        price = x["pricePerUnit"]
+        return (
+            not x["isGeneric"],
+            -(savings if savings is not None else float('-inf')),
+            price if price is not None else float('inf'),
+        )
+
+    processed_alternatives.sort(key=_sort_key)
 
     return {
         "targetMedicine": target.to_dict(),

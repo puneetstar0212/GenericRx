@@ -63,3 +63,51 @@ FastAPI automatically generates interactive API documentation. Once the server i
 ## ⚠️ Regulatory Disclaimer
 
 GenericRx is a neutral educational and price audit tool. Controlled drugs marked Schedule H or Schedule X require a valid doctor's prescription. Never alter your dosage strength or active chemical composition without prior consultation with a qualified medical professional or pharmacist.
+
+---
+
+## 🔍 Medicine Data Quality & Audit
+
+GenericRx includes a read-only data audit tool that checks the medicine seed file for structural and policy issues.
+
+### Running the audit
+
+```bash
+# From the repository root
+python genericrx/scripts/audit_medicine_seed.py
+```
+
+Generates:
+- `genericrx/data_quality_report/medicine_seed_audit.json`
+- `genericrx/data_quality_report/medicine_seed_findings.csv`
+
+### Running tests
+
+```bash
+# All tests (pytest)
+python -m pytest genericrx/tests/ test_app.py -v
+
+# Audit-specific unittest suite
+python -m unittest discover -s genericrx/tests -v
+```
+
+### Database migration (nullable prices)
+
+Before importing medicines with unknown prices (`null`), run the migration:
+
+```bash
+# Dry-run to preview steps
+python genericrx/scripts/migrate_price_nullable.py --dry-run
+
+# Apply migration (backs up database automatically)
+python genericrx/scripts/migrate_price_nullable.py
+```
+
+> ⚠️ **Important**: The migration backs up `genericrx.db` before any schema change. Do not run `Base.metadata.create_all()` as a migration substitute — it does not alter existing columns in SQLite.
+
+### Data quality policy
+
+- Prices that cannot be verified from a reliable source are stored as `null`, not zero.
+- The UI displays **"Price unavailable"** for unknown prices.
+- Savings calculations are skipped (not fabricated) when either price is missing.
+- See [`docs/MEDICINE_DATA_QUALITY.md`](docs/MEDICINE_DATA_QUALITY.md) for full sourcing policy and expansion workflow.

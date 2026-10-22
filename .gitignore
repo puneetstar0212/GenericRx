@@ -47,3 +47,12 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Medicine data quality bundle (source, not for commit)
+GenericRx_medicine_data_quality_bundle/
+
+# Database backup files created by migration script
+*_backup_*.db
+
+# Test databases
+test_*.db

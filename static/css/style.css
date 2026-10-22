@@ -846,3 +846,11 @@ body::before {
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* Price unavailable indicator — shown when a medicine's price is unknown/unverified */
+.price-unavailable {
+  color: var(--accent-amber);
+  font-style: italic;
+  font-size: 0.9em;
+  opacity: 0.9;
+}

@@ -209,6 +209,17 @@ async function performSearch(query) {
   renderSearchResults(results);
 }
 
+/**
+ * Format a price for display. Returns 'Price unavailable' when price is null
+ * or undefined, so the UI never shows NaN, ₹0, or crashes.
+ */
+function formatPrice(price) {
+  if (price === null || price === undefined) {
+    return '<span class="price-unavailable">Price unavailable</span>';
+  }
+  return `₹${price.toFixed(2)}`;
+}
+
 function renderSearchResults(results) {
   elements.searchCount.textContent = `${results.length} results found`;
   elements.searchResultsList.innerHTML = '';
@@ -245,7 +256,7 @@ function renderSearchResults(results) {
           <div class="med-manufacturer">${med.manufacturer} • ${med.therapeuticCategory}</div>
         </div>
         <div style="text-align: right;">
-          <div class="price-tag">₹${med.pricePerUnit.toFixed(2)}</div>
+          <div class="price-tag">${formatPrice(med.pricePerUnit)}</div>
           <div class="price-unit">per ${med.unitCount} units (${med.dosageForm})</div>
         </div>
       </div>
@@ -318,7 +329,7 @@ function renderAlternativesView(altData) {
         <span class="schedule-tag ${target.schedule.includes('H') || target.schedule.includes('X') ? 'schedule-h' : 'schedule-otc'}">${target.schedule}</span>
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">
-        <div>Price: <strong style="font-size: 1.2rem; color: #ffffff;">₹${target.pricePerUnit.toFixed(2)}</strong> (${target.unitCount} ${target.dosageForm})</div>
+        <div>Price: <strong style="font-size: 1.2rem; color: #ffffff;">${formatPrice(target.pricePerUnit)}</strong> (${target.unitCount} ${target.dosageForm})</div>
         <button class="btn-outline" onclick="addToBasket(${target.id})"><i data-lucide="shopping-bag" style="width: 14px; height: 14px;"></i> Add to Prescription Audit</button>
       </div>
     </div>
@@ -366,7 +377,7 @@ function renderAlternativesView(altData) {
           <div class="med-manufacturer">${alt.manufacturer}</div>
         </div>
         <div style="text-align: right;">
-          <div class="price-tag">₹${alt.pricePerUnit.toFixed(2)}</div>
+          <div class="price-tag">${formatPrice(alt.pricePerUnit)}</div>
           <div class="savings-badge ${badgeClass}" style="margin-top: 0.2rem;">
             <i data-lucide="trending-down" style="width: 12px; height: 12px;"></i>
             ${alt.savingsBadgeText}

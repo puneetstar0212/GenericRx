@@ -10,7 +10,9 @@ class Medicine(Base):
     salt_name = Column(String(255), nullable=False, index=True)
     strength = Column(String(100), nullable=False)
     dosage_form = Column(String(100), nullable=False)  # Tablet, Syrup, Injection, Capsule, Ointment
-    price_per_unit = Column(Float, nullable=False)  # Price in INR
+    # price_per_unit is nullable: unknown/unverified prices must be stored as NULL,
+    # never as zero or an estimated value.
+    price_per_unit = Column(Float, nullable=True)  # Price in INR; None means unknown/unverified
     unit_count = Column(Integer, default=10)        # Number of units per strip/bottle
     is_generic = Column(Boolean, default=False, index=True)
     manufacturer = Column(String(255), nullable=False)
@@ -25,6 +27,7 @@ class Medicine(Base):
             "saltName": self.salt_name,
             "strength": self.strength,
             "dosageForm": self.dosage_form,
+            # None is returned as-is; API consumers must treat null as "price unavailable".
             "pricePerUnit": self.price_per_unit,
             "unitCount": self.unit_count,
             "isGeneric": self.is_generic,

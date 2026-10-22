@@ -116,7 +116,8 @@ def seed_db():
                         salt_name=item["salt_name"],
                         strength=item["strength"],
                         dosage_form=item["dosage_form"],
-                        price_per_unit=item["price_per_unit"],
+                        # Preserve null prices — do not substitute zero for unknown prices.
+                        price_per_unit=item.get("price_per_unit"),
                         unit_count=item.get("unit_count", 10),
                         is_generic=item["is_generic"],
                         manufacturer=item["manufacturer"],
