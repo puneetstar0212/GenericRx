@@ -112,7 +112,7 @@ def audit_prescription_api(payload: PrescriptionAuditRequest, db: Session = Depe
     """
     Computes monthly and annual cost savings for a list of prescribed medications.
     """
-    items = [item.dict() for item in payload.items]
+    items = [item.model_dump() for item in payload.items]
     audit_res = calculate_prescription_audit(items, db)
     return audit_res
 

@@ -368,6 +368,93 @@ class TestMedicineModelNullablePrice(unittest.TestCase):
         d = med.to_dict()
         self.assertAlmostEqual(d["pricePerUnit"], 5.50)
 
+# ---------------------------------------------------------------------------
+# API-layer unit tests — null price serialisation & Pydantic V2 compatibility
+#
+# These tests verify the same properties as API integration tests but without
+# touching the global FastAPI app or any dependency_overrides, to avoid test
+# isolation failures when the full suite runs together.
+# ---------------------------------------------------------------------------
+
+class TestNullPriceAPIProperties(unittest.TestCase):
+    """Verify null-price handling at the model and engine layer (no HTTP needed)."""
+
+    def test_to_dict_exposes_null_price_as_none_not_zero(self):
+        """Medicine.to_dict() must return None for pricePerUnit, not 0 or omit the key."""
+        from app.models import Medicine
+        med = Medicine(
+            id=201,
+            name="UnverifiedDrug",
+            salt_name="SaltB",
+            strength="5mg",
+            dosage_form="Tablet",
+            price_per_unit=None,
+            unit_count=10,
+            is_generic=True,
+            manufacturer="Test Pharma",
+            schedule="OTC",
+            therapeutic_category="Test",
+        )
+        result = med.to_dict()
+        # The API serialises this dict directly — null must flow through.
+        self.assertIn("pricePerUnit", result, "pricePerUnit key must always be present in to_dict()")
+        self.assertIsNone(result["pricePerUnit"],
+                          "pricePerUnit must be None (JSON null) when price is unverified")
+        self.assertNotEqual(result["pricePerUnit"], 0,
+                            "pricePerUnit must not substitute 0 for an unknown price")
+
+    def test_audit_flags_missing_prices_and_excludes_from_totals(self):
+        """calculate_prescription_audit with a null-price brand returns hasMissingPrices and zeroed totals."""
+        from app.savings_engine import calculate_prescription_audit
+
+        brand = MagicMock()
+        brand.id = 201
+        brand.name = "NoPriceDrug"
+        brand.salt_name = "SaltB"
+        brand.price_per_unit = None
+        brand.unit_count = 10
+
+        session = MagicMock()
+        session.query.return_value.filter.return_value.first.side_effect = [brand, None]
+
+        result = calculate_prescription_audit(
+            [{"medicine_id": 201, "monthly_units": 30}],
+            session,
+        )
+        self.assertTrue(result["hasMissingPrices"],
+                        "hasMissingPrices should be True when brand price is null")
+        self.assertEqual(result["totalOriginalMonthly"], 0.0,
+                         "No cost should be accumulated when brand price is unknown")
+        self.assertIsNone(result["items"][0]["brandMonthlyCost"],
+                          "brandMonthlyCost must be None, not a fabricated number")
+
+    def test_main_py_uses_model_dump_not_dict(self):
+        """main.py must not contain the deprecated Pydantic .dict() call."""
+        main_path = REPO_ROOT / "app" / "main.py"
+        if not main_path.exists():
+            self.skipTest(f"main.py not found at {main_path}")
+        source = main_path.read_text(encoding="utf-8")
+        # After fix: only model_dump() should appear; no bare .dict() call.
+        self.assertNotIn(
+            "item.dict()",
+            source,
+            "main.py still contains deprecated item.dict() — should be item.model_dump()",
+        )
+        self.assertIn(
+            "model_dump()",
+            source,
+            "main.py should use item.model_dump() (Pydantic V2)",
+        )
+
+    def test_savings_engine_null_price_returns_correct_badge(self):
+        """calculate_savings_percentage and get_savings_badge_info agree on null→'Price unavailable'."""
+        from app.savings_engine import calculate_savings_percentage, get_savings_badge_info
+        pct = calculate_savings_percentage(None, 5.0)
+        self.assertIsNone(pct)
+        color, text = get_savings_badge_info(pct)
+        self.assertEqual(color, "gray")
+        self.assertIn("unavailable", text.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

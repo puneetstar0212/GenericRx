@@ -479,6 +479,9 @@ function updateBasketUI() {
     return;
   }
 
+  // Only sum items where both brand and generic prices are known.
+  // Items with unknown prices are shown clearly but excluded from totals
+  // to avoid fabricating savings from null values.
   let totalOrigMonthly = 0;
   let totalGenericMonthly = 0;
 
@@ -487,16 +490,39 @@ function updateBasketUI() {
     const generic = item.selectedAlternative;
     const units = item.units;
 
-    const brandMonthly = (brand.pricePerUnit / Math.max(1, brand.unitCount)) * units;
-    const genericMonthly = generic 
+    const brandPriceKnown = brand.pricePerUnit !== null && brand.pricePerUnit !== undefined;
+    const genericPriceKnown = generic && generic.pricePerUnit !== null && generic.pricePerUnit !== undefined;
+
+    // Safe per-unit cost — only computed when price is known.
+    const brandMonthly = brandPriceKnown
+      ? (brand.pricePerUnit / Math.max(1, brand.unitCount)) * units
+      : null;
+    const genericMonthly = genericPriceKnown
       ? (generic.pricePerUnit / Math.max(1, generic.unitCount)) * units
-      : brandMonthly;
+      : null;
 
-    const monthlySaved = brandMonthly - genericMonthly;
-    const savingsPct = brandMonthly > 0 ? ((brandMonthly - genericMonthly) / brandMonthly) * 100 : 0;
+    // Build display values — fall back to "Price unavailable" text when null.
+    let savingsLine = '';
+    if (brandMonthly !== null && genericMonthly !== null) {
+      const monthlySaved = brandMonthly - genericMonthly;
+      const savingsPct = brandMonthly > 0 ? ((brandMonthly - genericMonthly) / brandMonthly) * 100 : 0;
+      savingsLine = `<div style="font-weight: 700; color: #34d399;">Saved ₹${monthlySaved.toFixed(2)}/mo</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${savingsPct.toFixed(1)}% cheaper</div>`;
+      totalOrigMonthly += brandMonthly;
+      totalGenericMonthly += genericMonthly;
+    } else if (brandMonthly !== null) {
+      // Brand price known but generic price unknown — include brand in totals,
+      // treat generic as same cost so no artificial savings are claimed.
+      savingsLine = `<div style="font-size: 0.75rem; color: var(--accent-amber); font-style: italic;">Generic price unavailable — savings unknown</div>`;
+      totalOrigMonthly += brandMonthly;
+      totalGenericMonthly += brandMonthly;
+    } else {
+      savingsLine = `<div style="font-size: 0.75rem; color: var(--accent-amber); font-style: italic;">Price unavailable — excluded from savings total</div>`;
+    }
 
-    totalOrigMonthly += brandMonthly;
-    totalGenericMonthly += genericMonthly;
+    const altPriceDisplay = generic
+      ? (genericPriceKnown ? `₹${generic.pricePerUnit.toFixed(2)}` : 'Price unavailable')
+      : 'No generic selected';
 
     const basketItem = document.createElement('div');
     basketItem.className = 'basket-item';
@@ -505,12 +531,11 @@ function updateBasketUI() {
         <div style="font-weight: 700; color: #ffffff;">${brand.name}</div>
         <div style="font-size: 0.75rem; color: var(--text-muted);">${brand.saltName}</div>
         <div style="font-size: 0.8rem; color: #34d399; margin-top: 0.25rem;">
-          Alt: ${generic ? generic.name : 'No generic selected'} (₹${generic ? generic.pricePerUnit.toFixed(2) : brand.pricePerUnit.toFixed(2)})
+          Alt: ${generic ? generic.name : 'No generic selected'} (${altPriceDisplay})
         </div>
       </div>
       <div style="text-align: right; margin-left: 1rem;">
-        <div style="font-weight: 700; color: #34d399;">Saved ₹${monthlySaved.toFixed(2)}/mo</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">${savingsPct.toFixed(1)}% cheaper</div>
+        ${savingsLine}
         <button style="background: transparent; border: none; color: #f43f5e; font-size: 0.75rem; cursor: pointer; margin-top: 0.2rem;" onclick="removeFromBasket(${index})">
           Remove
         </button>
@@ -695,30 +720,50 @@ function openReportModal() {
   let tableRows = '';
   let totalOrig = 0;
   let totalGen = 0;
+  let hasUnknownPrices = false;
 
   AppState.basket.forEach(item => {
     const b = item.medicine;
     const g = item.selectedAlternative;
     const units = item.units;
 
-    const origMonthly = (b.pricePerUnit / Math.max(1, b.unitCount)) * units;
-    const genMonthly = g ? (g.pricePerUnit / Math.max(1, g.unitCount)) * units : origMonthly;
-    const saved = origMonthly - genMonthly;
+    const brandPriceKnown = b.pricePerUnit !== null && b.pricePerUnit !== undefined;
+    const genericPriceKnown = g && g.pricePerUnit !== null && g.pricePerUnit !== undefined;
 
-    totalOrig += origMonthly;
-    totalGen += genMonthly;
+    // Only compute monetary values when the price is known — never fabricate from null.
+    const origMonthly = brandPriceKnown ? (b.pricePerUnit / Math.max(1, b.unitCount)) * units : null;
+    const genMonthly  = genericPriceKnown ? (g.pricePerUnit / Math.max(1, g.unitCount)) * units : null;
+
+    const brandDisplay   = brandPriceKnown   ? `₹${b.pricePerUnit.toFixed(2)} (${b.dosageForm})` : `<span class="price-unavailable">Price unavailable</span>`;
+    const genericDisplay = genericPriceKnown ? `₹${g.pricePerUnit.toFixed(2)}`                   : (g ? `<span class="price-unavailable">Price unavailable</span>` : '—');
+
+    let savedDisplay = '—';
+    if (origMonthly !== null && genMonthly !== null) {
+      const saved = origMonthly - genMonthly;
+      savedDisplay = `₹${saved.toFixed(2)}`;
+      totalOrig += origMonthly;
+      totalGen  += genMonthly;
+    } else if (origMonthly !== null) {
+      // Brand price known, generic unknown — include brand in total, no artificial savings.
+      totalOrig += origMonthly;
+      totalGen  += origMonthly;
+      hasUnknownPrices = true;
+      savedDisplay = '<span class="price-unavailable">Unknown</span>';
+    } else {
+      hasUnknownPrices = true;
+    }
 
     tableRows += `
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #334155;">
           <strong>${b.name}</strong><br><small style="color: #94a3b8;">${b.saltName}</small>
         </td>
-        <td style="padding: 8px; border-bottom: 1px solid #334155;">₹${b.pricePerUnit.toFixed(2)} (${b.dosageForm})</td>
+        <td style="padding: 8px; border-bottom: 1px solid #334155;">${brandDisplay}</td>
         <td style="padding: 8px; border-bottom: 1px solid #334155; color: #34d399;">
           <strong>${g ? g.name : 'N/A'}</strong><br><small style="color: #94a3b8;">${g ? g.manufacturer : ''}</small>
         </td>
-        <td style="padding: 8px; border-bottom: 1px solid #334155; color: #34d399;">₹${g ? g.pricePerUnit.toFixed(2) : b.pricePerUnit.toFixed(2)}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #334155; text-align: right; color: #34d399; font-weight: bold;">₹${saved.toFixed(2)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #334155; color: #34d399;">${genericDisplay}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #334155; text-align: right; color: #34d399; font-weight: bold;">${savedDisplay}</td>
       </tr>
     `;
   });
@@ -758,6 +803,10 @@ function openReportModal() {
         <div style="font-size: 1.8rem; font-weight: 800; color: #34d399;">₹${totalSavedYearly.toFixed(2)} / yr</div>
       </div>
     </div>
+
+    ${hasUnknownPrices ? `<div style="border: 1px solid rgba(245,158,11,0.4); background: rgba(245,158,11,0.1); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--accent-amber);">
+      ⚠️ <strong>Price Unavailable Notice:</strong> One or more medicines in this report have unverified prices. Those items are excluded from savings totals — do not assume the savings figure covers all prescribed medications.
+    </div>` : ''}
 
     <div style="border-top: 1px dashed var(--border-color); padding-top: 1rem; font-size: 0.8rem; color: var(--text-muted); text-align: center;">
       ⚠️ <strong>Medical Regulatory Disclaimer:</strong> This audit report is produced for financial optimization and therapeutic awareness. Patients must consult a qualified medical practitioner or pharmacist before modifying any active medication or dosage strength.
